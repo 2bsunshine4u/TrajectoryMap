@@ -3,6 +3,7 @@ import math
 import shapefile
 import sys 
 import time
+import psycopg2
 from TrajectoryUtils import map_dist, is_line_segment_intersects_box, line_segment_cross
 
 class TrajectoryPoint(object):
@@ -191,18 +192,28 @@ class TrajectoryMap(object):
                     self.road_intersections[road_id2].add(self.intersections.index(k))
 
 
-    def ShortestPath(self, filename):
-        outfile = open(filename, 'w')
+    def ShortestPath(self):
+        #outfile = open(filename, 'w')
+        print "Connecting.."
+        conn_to = psycopg2.connect(host='localhost',port='5432',database="shortest_path",
+                                   user='postgres',password='123456')
+        print "Connected.\n"
+        cursor_to = conn_to.cursor()
+
+        cursor_to.execute("TRUNCATE TABLE shortest_path")
+
 
         for i in range(0, len(self.roads)):
                 for j in range(0, len(self.roads[i]) - 1):
                     print "Processing the ShortestPath from %d-%d" % (i, j)
-                    self.Dijkstra(i, j, self.roads, self.intersections, self.road_intersections, outfile)
+                    self.Dijkstra(i, j, self.roads, self.intersections, self.road_intersections, cursor_to)
     
-        outfile.close()
+        conn_to.commit()
+        conn_to.close()
+        #outfile.close()
 
     
-    def Dijkstra(self, road_id, segment_id, roads, intersections, road_intersections, outfile):
+    def Dijkstra(self, road_id, segment_id, roads, intersections, road_intersections, cursor_to):
         INF = 9999999
         
         S = []
@@ -324,8 +335,10 @@ class TrajectoryMap(object):
 
         for seg in S:
             if SegmentDistance[seg][0] <= INF:
-                outfile.write("%d-%d %d-%d %d %d-%d\n" % (road_id, segment_id, seg[0], seg[1], SegmentDistance[seg][0], SegmentDistance[seg][1], SegmentDistance[seg][2]))
-
+                #outfile.write("%d-%d %d-%d %d %d-%d\n" % (road_id, segment_id, seg[0], seg[1], SegmentDistance[seg][0], SegmentDistance[seg][1], SegmentDistance[seg][2]))
+                sql = "INSERT INTO shortest_path(src_roadid,src_segmentid,dst_roadid,dst_segmentid,prev_roadid,prev_segmentid) values(%d,%d,%d,%d,%d,%d)" % (road_id, segment_id, seg[0], seg[1], SegmentDistance[seg][1], SegmentDistance[seg][2])
+                #print sql
+                cursor_to.execute(sql)
     
     def simple_map_matching_trajectory(self, filename):  #match the gps points with roads and segments
         for p in self.trajectory_points[filename]:

@@ -9,7 +9,7 @@ import sys
 import uuid
 import re
 from TrajectoryMap import *
-#from ConnPostgreSQL import *
+import psycopg2
 
 from TrajectoryUtils import map_dist, rand_color, line_segment_cross, DistancePointLine, is_line_segment_intersects_box, hsv2rgb
 JPEG_ROOT = "/usr/lib"
@@ -192,8 +192,6 @@ class MapCanvas(Frame):
 
         self.coress_dict = {}
         self.traj_shapes = {}
-
-        self.segment_dis = {}
 
     def to_lon_lat(self, x, y):
         #cx = self.canvas.canvasx(self.canvas.winfo_width()/2)
@@ -670,8 +668,8 @@ class MapCanvas(Frame):
         x2,y2 = self.to_canvas_xy(x2, y2)
         self.canvas.create_line(x1, y1, x2, y2, fill=fill, width=width, dash=dash, tag="map-matching")
 
+    '''
     def load_shortest_path(self, filename):
-        print "loading shortest path ~~~~~~~~~~~filename:%s~~~~~~~~~~~~~~~~~~~~~~" % filename
         sp_file = open(filename, "r")
         while 1:
             lines = sp_file.readlines(10000)
@@ -691,18 +689,22 @@ class MapCanvas(Frame):
                 self.segment_dis[(src_idx), (dst_idx)] = (prev_road_id, prev_segment_id)
 
         sp_file.close()
-
-
+        '''
     def draw_shortest_path(self, prev_road_id, prev_segment_id, min_road_id, min_segment_id):
         tar = (min_road_id, min_segment_id)
 
-        if not self.segment_dis.has_key(((prev_road_id, prev_segment_id),(min_road_id, min_segment_id))):
+        sql = "SELECT prev_roadid, prev_segmentid from shortest_path where src_roadid = %d and src_segmentid = %d and dst_roadid = %d and dst_segmentid = %d" % (prev_road_id, prev_segment_id, min_road_id, min_segment_id)
+        self.cursor_to.execute(sql)
+        result = self.cursor_to.fetchall()
+
+
+        if len(result) == 0:
             return -1
 
         while prev_road_id != tar[0] or prev_segment_id != tar[1]:
             print tar[0], "-", tar[1]
             self.draw_line(self.traj_map.roads[tar[0]][tar[1]][0], self.traj_map.roads[tar[0]][tar[1]][1], self.traj_map.roads[tar[0]][tar[1]+1][0], self.traj_map.roads[tar[0]][tar[1]+1][1])
-            tar = self.segment_dis[((prev_road_id, prev_segment_id), tar)]
+            tar = result[0]
 
     def draw_map_matching_point(self, obj_id, timestamp, px, py, prev_road_id, prev_segment_id):
         #yxy#roads = [y.shape.points for x in self.map_shapes.values() for y in x[1]]
@@ -714,6 +716,8 @@ class MapCanvas(Frame):
         col_l = max(0, col - 1)
         col_h = min(self.TOTAL_GRID_COLS, col + 1)
         
+        print "Draw MapMatching path at time:", timestamp
+
         search_range = []
         #print 'row_l,row_h,col_l,col_h',row_l,row_h,col_l,col_h
         for i in range(row_l, row_h + 1):
@@ -738,12 +742,23 @@ class MapCanvas(Frame):
         return min_road_id, min_segment_id
 
     def draw_map_matching_trajectory(self, filename):
+        print "loading shortest path ~~~~~~~~~~~dbname:%s~~~~~~~~~~~~~~~~~~~~~~" % filename
+        #outfile = open(filename, 'w')
+        print "Connecting.."
+        self.conn_to = psycopg2.connect(host='localhost',port='5432',database="shortest_path",
+                                   user='postgres',password='123456')
+        print "Connected.\n"
+        self.cursor_to = self.conn_to.cursor()
+
         print "Map Matching ~~~~~~~~~~~filename:%s~~~~~~~~~~~~~~~~~~~~~~" % filename
         traj_color, points = self.traj_shapes[filename]
         self.split_roads_to_grid()
         prev_road_id, prev_segment_id = points[0][1:]
         for p in points:
             prev_road_id, prev_segment_id = self.draw_map_matching_point(filename, p[0], p[1], p[2], prev_road_id, prev_segment_id)
+
+        self.conn_to.commit()
+        self.conn_to.close()
 
     def get_map_matching_trajectory(self, filename):
         '''readfile "13301104001 20101101000157 116.3428345 39.85949707 0 332 0 4 50#" '''
@@ -846,7 +861,7 @@ if __name__ == '__main__':
     beijingmap.stat_trajectories()
 
     # make road index
-    #beijingmap.index_roads_on_grid()
+    beijingmap.index_roads_on_grid()
     #beijingmap.dump_grid_road_index()
 
     # generate road graph
@@ -855,11 +870,11 @@ if __name__ == '__main__':
     #beijingmap.gen_intersections_in_grid_cell(60, 51)
     #beijingmap.gen_intersections_in_grid_cell(60, 52)
     #beijingmap.gen_intersections_in_grid_cell(60, 53)
-    #beijingmap.gen_road_graph()
+    beijingmap.gen_road_graph()
     #beijingmap.gen_intersections_in_grid_cell(410, 315)
     
     #calculate the shortestpath
-    #beijingmap.ShortestPath("shortest_path")
+    beijingmap.ShortestPath()
 
     # map matching
     #beijingmap.simple_map_matching_trajectory("13301104001.20101101.traj")
@@ -869,7 +884,7 @@ if __name__ == '__main__':
     map_canvas = MapCanvas(beijingmap, master)
     map_canvas.draw_map()
     #map_canvas.draw_grid()
-    map_canvas.draw_all_trajectories()
+    #map_canvas.draw_all_trajectories()
     #map_canvas.draw_trajectory("13301104001.20101101.traj")#, start_time="20101101000000", end_time="20101102000000")
     #map_canvas.draw_trajectory("13301104002.traj", "blue")
     #map_canvas.draw_trajectory("13301104003.traj", "green")
@@ -888,9 +903,8 @@ if __name__ == '__main__':
     #map_canvas.highlight_intersections()
 
     #load the shortest_path and mapmatch
-    map_canvas.load_shortest_path("shortest_path")
     #map_canvas.draw_map_matching_point("", 0, px, py)
-    map_canvas.draw_all_map_matching_trajectories()
+    #map_canvas.draw_all_map_matching_trajectories()
     #map_canvas.draw_map_matching_trajectory("13301104001.20101101.traj")
 
     #roads = [7878, 7879]
