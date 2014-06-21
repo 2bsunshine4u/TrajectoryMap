@@ -347,33 +347,6 @@ class MapCanvas(Frame):
         # reset zoom scale
         self.scale = 3.0
 
-    def draw_map_matching_point(self, lon, lat, plon, plat, rlon1, rlat1, rlon2, rlat2, tag):
-        x, y = self.to_canvas_xy(lon, lat)
-        px, py = self.to_canvas_xy(plon, plat)
-        x1, y1 = self.to_canvas_xy(rlon1, rlat1)
-        x2, y2 = self.to_canvas_xy(rlon2, rlat2)
-        self.canvas.create_oval(x, y, x, y, fill="red", tag=tag)
-        self.canvas.create_oval(px, py, px, py, fill="red", tag=tag)
-        self.canvas.create_line(x, y, px, py, fill="green", width=1, dash=(3,3), tag=tag)
-        self.canvas.create_line(x1, y1, x2, y2, fill="red", width=5, tag=tag)
-
-##    def draw_map_matching_trajectory(self, filename):
-##        for p in self.traj_map.trajectory_points[filename]:
-##            if True: #road_id > 0 and seg_id > 0:
-##                rlon1, rlat1 = self.traj_map.roads[p.road_id][p.seg_id]
-##                rlon2, rlat2 = self.traj_map.roads[p.road_id][p.seg_id+1]
-##                #print (p.lon, p.lat, p.plon, p.plat, p.rlon1, p.rlat1, p.rlon2, p.rlat2)
-##                self.draw_map_matching_point(p.lon, p.lat, p.plon, p.plat, rlon1, rlat1, rlon2, \
-##                        rlat2, "map-matching-"+filename)
-##
-##        var_cb_map_matching = IntVar()
-##        self.traj_mm_var_cb[filename] = var_cb_map_matching
-##        cb_map_matching = Checkbutton(self.f_panel, text="Map Matching-" + filename, variable=var_cb_map_matching, \
-##                 onvalue=1, offvalue=0, height=5, width=20, \
-##                 command=lambda: self.onLayerRedraw("map-matching-" + filename, var_cb_map_matching))
-##        cb_map_matching.select()
-##        cb_map_matching.pack()
-
     def draw_all_map_matching_trajectories(self):
         for f in self.traj_shapes.keys():
             self.draw_map_matching_trajectory(f)
@@ -663,48 +636,26 @@ class MapCanvas(Frame):
         x,y = self.to_canvas_xy(x, y)
         self.canvas.create_oval(x,y,x,y,fill="red", tag="map-matching")
 
-    def draw_line(self, x1, y1, x2, y2, fill="red", width=3.0, dash=""):
-        x1,y1 = self.to_canvas_xy(x1, y1)
-        x2,y2 = self.to_canvas_xy(x2, y2)
-        self.canvas.create_line(x1, y1, x2, y2, fill=fill, width=width, dash=dash, tag="map-matching")
+    def draw_line(self, x1, y1, x2, y2):
+        #print "draw_line:",x1,y1,'- ', x2,y2
+        self.MapMatchingFile.write("%f %f-%f %f\n" % (x1, y1, x2, y2))
 
-    '''
-    def load_shortest_path(self, filename):
-        sp_file = open(filename, "r")
-        while 1:
-            lines = sp_file.readlines(10000)
-            if not lines:
-                break
-            for line in lines:
-                line = line.strip()
-                words = line.split(' ')
-                src_road_id = int(words[0].split('-')[0])
-                src_segment_id = int(words[0].split('-')[1])
-                src_idx = (src_road_id, src_segment_id)
-                dst_road_id = int(words[1].split('-')[0])
-                dst_segment_id = int(words[1].split('-')[1])
-                dst_idx = (dst_road_id, dst_segment_id)
-                prev_road_id = int(words[3].split('-')[0])
-                prev_segment_id = int(words[3].split('-')[1])
-                self.segment_dis[(src_idx), (dst_idx)] = (prev_road_id, prev_segment_id)
-
-        sp_file.close()
-        '''
     def draw_shortest_path(self, prev_road_id, prev_segment_id, min_road_id, min_segment_id):
+        print "Draw shortest_path to road-segment: ", min_road_id, '-', min_segment_id
         tar = (min_road_id, min_segment_id)
 
-        sql = "SELECT prev_roadid, prev_segmentid from shortest_path where src_roadid = %d and src_segmentid = %d and dst_roadid = %d and dst_segmentid = %d" % (prev_road_id, prev_segment_id, min_road_id, min_segment_id)
-        self.cursor_to.execute(sql)
-        result = self.cursor_to.fetchall()
-
-
-        if len(result) == 0:
-            return -1
-
         while prev_road_id != tar[0] or prev_segment_id != tar[1]:
-            print tar[0], "-", tar[1]
             self.draw_line(self.traj_map.roads[tar[0]][tar[1]][0], self.traj_map.roads[tar[0]][tar[1]][1], self.traj_map.roads[tar[0]][tar[1]+1][0], self.traj_map.roads[tar[0]][tar[1]+1][1])
-            tar = result[0]
+            
+            sql = "SELECT prev_roadid, prev_segmentid from shortest_path where src_roadid = %d and src_segmentid = %d and dst_roadid = %d and dst_segmentid = %d" % (prev_road_id, prev_segment_id, tar[0], tar[1])
+            self.cursor_to.execute(sql)
+            result = self.cursor_to.fetchall()
+
+            if len(result) == 0:
+                return -1
+            tar = result[0] 
+            print "Filled road-segment: ",tar[0], "-", tar[1]
+        return 0
 
     def draw_map_matching_point(self, obj_id, timestamp, px, py, prev_road_id, prev_segment_id):
         #yxy#roads = [y.shape.points for x in self.map_shapes.values() for y in x[1]]
@@ -716,7 +667,7 @@ class MapCanvas(Frame):
         col_l = max(0, col - 1)
         col_h = min(self.TOTAL_GRID_COLS, col + 1)
         
-        print "Draw MapMatching path at time:", timestamp
+        print "Draw MapMatching path at time:", time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(timestamp))
 
         search_range = []
         #print 'row_l,row_h,col_l,col_h',row_l,row_h,col_l,col_h
@@ -753,30 +704,35 @@ class MapCanvas(Frame):
         print "Map Matching ~~~~~~~~~~~filename:%s~~~~~~~~~~~~~~~~~~~~~~" % filename
         traj_color, points = self.traj_shapes[filename]
         self.split_roads_to_grid()
-        prev_road_id, prev_segment_id = points[0][1:]
+        prev_road_id, prev_segment_id = points[0][1:3]
+      
+        self.MapMatchingFile = open(filename + '_matching', 'w')
+
         for p in points:
             prev_road_id, prev_segment_id = self.draw_map_matching_point(filename, p[0], p[1], p[2], prev_road_id, prev_segment_id)
+
+        self.MapMatchingFile.close()
 
         self.conn_to.commit()
         self.conn_to.close()
 
-    def get_map_matching_trajectory(self, filename):
-        '''readfile "13301104001 20101101000157 116.3428345 39.85949707 0 332 0 4 50#" '''
-        traj_file = open(filename, "r")
-        output_file = open(filename+'_roadid', 'w')
+    def display_map_matching_trajectory(self, filename, fill="red", width=3.0, dash=""):
+        traj_file = open(filename + "_matching", "r")
         while 1:
             lines = traj_file.readlines(1000)
             if not lines:
                 break
             for line in lines:
                 line = line.strip()
-                words = line.split(' ')
-                point = words[2:4]
-                #print point
-                road_id,dist = self.get_map_matching_point(float(point[0]), float(point[1]))
-                output_file.write("%s %s %s\n" % (line,road_id,dist))
+                words = line.split('-')
+                point1 = words[0].split(' ')
+                point2 = words[1].split(' ')
+                x1,y1 = self.to_canvas_xy(float(point1[0]), float(point1[1]))
+                x2,y2 = self.to_canvas_xy(float(point2[0]), float(point2[1]))
+                self.canvas.create_line(x1, y1, x2, y2, fill=fill, width=width, dash=dash, tag="map-matching")
+                print "draw_trajectory_segment: ", point1[0], point1[1], 'to', point2[0], point2[1] 
         traj_file.close()
-        output_file.close()
+
     def write_roadid(self):
         ''' '''
         output_file = open('road_network2', 'w')
@@ -870,11 +826,11 @@ if __name__ == '__main__':
     #beijingmap.gen_intersections_in_grid_cell(60, 51)
     #beijingmap.gen_intersections_in_grid_cell(60, 52)
     #beijingmap.gen_intersections_in_grid_cell(60, 53)
-    beijingmap.gen_road_graph()
+    #beijingmap.gen_road_graph()
     #beijingmap.gen_intersections_in_grid_cell(410, 315)
     
     #calculate the shortestpath
-    beijingmap.ShortestPath()
+    #beijingmap.ShortestPath()
 
     # map matching
     #beijingmap.simple_map_matching_trajectory("13301104001.20101101.traj")
@@ -884,7 +840,7 @@ if __name__ == '__main__':
     map_canvas = MapCanvas(beijingmap, master)
     map_canvas.draw_map()
     #map_canvas.draw_grid()
-    #map_canvas.draw_all_trajectories()
+    map_canvas.draw_all_trajectories()
     #map_canvas.draw_trajectory("13301104001.20101101.traj")#, start_time="20101101000000", end_time="20101102000000")
     #map_canvas.draw_trajectory("13301104002.traj", "blue")
     #map_canvas.draw_trajectory("13301104003.traj", "green")
@@ -904,8 +860,10 @@ if __name__ == '__main__':
 
     #load the shortest_path and mapmatch
     #map_canvas.draw_map_matching_point("", 0, px, py)
-    #map_canvas.draw_all_map_matching_trajectories()
+    map_canvas.draw_all_map_matching_trajectories()
     #map_canvas.draw_map_matching_trajectory("13301104001.20101101.traj")
+ 
+    map_canvas.display_map_matching_trajectory("13301104001.20101101.traj")
 
     #roads = [7878, 7879]
     #map_canvas.highlight_road_set(roads)
