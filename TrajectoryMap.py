@@ -220,44 +220,21 @@ class TrajectoryMap(object):
         U = []
     
         row, col = self.lon_lat_to_grid_row_col(roads[road_id][segment_id][0], (roads[road_id][segment_id][1] + roads[road_id][segment_id+1][1])/2)
+        row_l = max(0, row - 2)
+        row_h = min(self.TOTAL_GRID_ROWS, row + 2)
+        col_l = max(0, col - 2)
+        col_h = min(self.TOTAL_GRID_COLS, col + 2)
+
+        search_range = []
+        for i in range(row_l, row_h + 1):
+            for j in range(col_l, col_h + 1):
+                search_range += self.grid_road_index[i][j]
 
         SegmentDistance = {}
 
-        for i in range(0, len(self.grid_road_index[row-1][col-1])):
-            SegmentDistance[(self.grid_road_index[row-1][col-1][i][0], self.grid_road_index[row-1][col-1][i][1])] = [INF, INF, INF]
-            U.append((self.grid_road_index[row-1][col-1][i][0], self.grid_road_index[row-1][col-1][i][1]))
-
-        for i in range(0, len(self.grid_road_index[row-1][col])):
-            SegmentDistance[(self.grid_road_index[row-1][col][i][0], self.grid_road_index[row-1][col][i][1])] = [INF, INF, INF]
-            U.append((self.grid_road_index[row-1][col][i][0], self.grid_road_index[row-1][col][i][1]))
-
-        for i in range(0, len(self.grid_road_index[row-1][col+1])):
-            SegmentDistance[(self.grid_road_index[row-1][col+1][i][0], self.grid_road_index[row-1][col+1][i][1])] = [INF, INF, INF]
-            U.append((self.grid_road_index[row-1][col+1][i][0], self.grid_road_index[row-1][col+1][i][1]))
-
-        for i in range(0, len(self.grid_road_index[row][col-1])):
-            SegmentDistance[(self.grid_road_index[row][col-1][i][0], self.grid_road_index[row][col-1][i][1])] = [INF, INF, INF]
-            U.append((self.grid_road_index[row][col-1][i][0], self.grid_road_index[row][col-1][i][1]))
-
-        for i in range(0, len(self.grid_road_index[row][col])):
-            SegmentDistance[(self.grid_road_index[row][col][i][0], self.grid_road_index[row][col][i][1])] = [INF, INF, INF]
-            U.append((self.grid_road_index[row][col][i][0], self.grid_road_index[row][col][i][1]))
-
-        for i in range(0, len(self.grid_road_index[row][col+1])):
-            SegmentDistance[(self.grid_road_index[row][col+1][i][0], self.grid_road_index[row][col+1][i][1])] = [INF, INF, INF]
-            U.append((self.grid_road_index[row][col+1][i][0], self.grid_road_index[row][col+1][i][1]))
-
-        for i in range(0, len(self.grid_road_index[row+1][col-1])):
-            SegmentDistance[(self.grid_road_index[row+1][col-1][i][0], self.grid_road_index[row+1][col-1][i][1])] = [INF, INF, INF]
-            U.append((self.grid_road_index[row+1][col-1][i][0], self.grid_road_index[row+1][col-1][i][1]))
-
-        for i in range(0, len(self.grid_road_index[row+1][col])):
-            SegmentDistance[(self.grid_road_index[row+1][col][i][0], self.grid_road_index[row+1][col][i][1])] = [INF, INF, INF]
-            U.append((self.grid_road_index[row+1][col][i][0], self.grid_road_index[row+1][col][i][1]))
-
-        for i in range(0, len(self.grid_road_index[row+1][col+1])):
-            SegmentDistance[(self.grid_road_index[row+1][col+1][i][0], self.grid_road_index[row+1][col+1][i][1])] = [INF, INF, INF]
-            U.append((self.grid_road_index[row+1][col+1][i][0], self.grid_road_index[row+1][col+1][i][1]))
+        for i in range(0, len(search_range)):
+            SegmentDistance[(search_range[i][0], search_range[i][1])] = [INF, INF, INF]
+            U.append((search_range[i][0], search_range[i][1]))
 
         SegmentDistance[(road_id,segment_id)] = [0, road_id, segment_id]
 
@@ -303,7 +280,7 @@ class TrajectoryMap(object):
                         SegmentDistance[neighbor][1] = minidx[0]
                         SegmentDistance[neighbor][2] = minidx[1]
 
-            if SegmentDistance.has_key((minidx[0], minidx[1] - 1)) and minidx[1] > 0:
+            if minidx[1] > 0 and SegmentDistance.has_key((minidx[0], minidx[1] - 1)):
                 lon11 = roads[minidx[0]][minidx[1]][0]
                 lon12 = roads[minidx[0]][minidx[1] + 1][0]
                 lat11 = roads[minidx[0]][minidx[1]][1] 
@@ -318,7 +295,7 @@ class TrajectoryMap(object):
                     SegmentDistance[(minidx[0], minidx[1] - 1)][1] = minidx[0]
                     SegmentDistance[(minidx[0], minidx[1] - 1)][2] = minidx[1]
 
-            if SegmentDistance.has_key((minidx[0], minidx[1] + 1)) and minidx[1] < len(roads[minidx[0]]) - 2:
+            if minidx[1] < len(roads[minidx[0]]) - 2 and SegmentDistance.has_key((minidx[0], minidx[1] + 1)):
                 lon11 = roads[minidx[0]][minidx[1]][0]
                 lon12 = roads[minidx[0]][minidx[1] + 1][0]
                 lat11 = roads[minidx[0]][minidx[1]][1] 

@@ -847,11 +847,11 @@ if __name__ == '__main__':
     #beijingmap.gen_intersections_in_grid_cell(60, 51)
     #beijingmap.gen_intersections_in_grid_cell(60, 52)
     #beijingmap.gen_intersections_in_grid_cell(60, 53)
-    #beijingmap.gen_road_graph()
+    beijingmap.gen_road_graph()
     #beijingmap.gen_intersections_in_grid_cell(410, 315)
     
     #calculate the shortestpath
-    #beijingmap.ShortestPath()
+    beijingmap.ShortestPath()
 
     # map matching
     #beijingmap.simple_map_matching_trajectory("13301104001.20101101.traj")
