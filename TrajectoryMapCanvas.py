@@ -566,8 +566,8 @@ class MapCanvas(Frame):
                 self.CANVAS_MIN_Y + row * self.traj_map.GRID_INTERVAL
 
 #============================================================================
-    def simple_map_matching(self, search_range, px, py):
-        px, py = self.to_canvas_xy(px, py)
+    def simple_map_matching(self, search_range, plon, plat):
+        px, py = self.to_canvas_xy(plon, plat)
         #search_range: [(road_id, seg_id),...]
         # get all min_type
         maxdist = 0.5
@@ -575,16 +575,21 @@ class MapCanvas(Frame):
         #print "search_range:%s" % search_range
         
         for i, j in search_range:
+            flag = False
             x1, y1 = self.to_canvas_xy(self.traj_map.roads[i][j][0], self.traj_map.roads[i][j][1])
             x2, y2 = self.to_canvas_xy(self.traj_map.roads[i][j+1][0], self.traj_map.roads[i][j+1][1])
-            dist, lx, ly = DistancePointLine(px, py, x1, y1, x2, y2)
+            dist, lx, ly = DistancePointLine(px, py, x1, y1, x2, y2) 
             #print "segment:%s-%s dist:%s" % (i,j,dist)
             if dist < maxdist:
                 for idx in range(0, len(matching_set)):  #insert segs whose dist less than 50m into list in order of dist
                     if(dist < matching_set[idx][0]):
                         matching_set.insert(idx, (dist, i, j))
-                    elif idx == len(matching_set) - 1:
-                        matching_set.append((dist, i, j))
+                        flag = True
+                        break
+                if flag == False:
+                    matching_set.append((dist, i, j))
+
+        print len(matching_set)
 
         return matching_set
     
@@ -635,18 +640,21 @@ class MapCanvas(Frame):
         self.MapMatchingFile.write("%f %f-%f %f\n" % (x1, y1, x2, y2))
 
     def draw_shortest_path(self, prev_road_id, prev_segment_id, min_road_id, min_segment_id):
-        print "Draw shortest_path to road-segment: ", min_road_id, '-', min_segment_id
+        print "Search for shortest_path to road-segment: ", min_road_id, '-', min_segment_id
         tar = (min_road_id, min_segment_id)
 
         while prev_road_id != tar[0] or prev_segment_id != tar[1]:
-            self.draw_line(self.traj_map.roads[tar[0]][tar[1]][0], self.traj_map.roads[tar[0]][tar[1]][1], self.traj_map.roads[tar[0]][tar[1]+1][0], self.traj_map.roads[tar[0]][tar[1]+1][1])
-            
             sql = "SELECT prev_roadid, prev_segmentid from shortest_path where src_roadid = %d and src_segmentid = %d and dst_roadid = %d and dst_segmentid = %d" % (prev_road_id, prev_segment_id, tar[0], tar[1])
             self.cursor_to.execute(sql)
             result = self.cursor_to.fetchall()
 
             if len(result) == 0:
+                print "Failed!"
                 return -1
+
+            print "Succeeded!"
+            self.draw_line(self.traj_map.roads[tar[0]][tar[1]][0], self.traj_map.roads[tar[0]][tar[1]][1], self.traj_map.roads[tar[0]][tar[1]+1][0], self.traj_map.roads[tar[0]][tar[1]+1][1])
+
             tar = result[0] 
             print "Filled road-segment: ",tar[0], "-", tar[1]
         return 0
@@ -659,8 +667,8 @@ class MapCanvas(Frame):
         row_l = max(0, row - 1)
         row_h = min(self.TOTAL_GRID_ROWS, row + 1)
         col_l = max(0, col - 1)
-        col_h = min(self.TOTAL_GRID_COLS, col + 1)
-        
+        col_h = min(self.TOTAL_GRID_COLS, col + 1)       
+ 
         print "Draw MapMatching path at time:", time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(timestamp))
 
         search_range = []
@@ -679,7 +687,7 @@ class MapCanvas(Frame):
                     print road_id, "-", j
                     self.draw_line(self.traj_map.roads[road_id][j][0], self.traj_map.roads[road_id][j][1], self.traj_map.roads[road_id][j+1][0], self.traj_map.roads[road_id][j+1][1])
                     flag = True
-                    break
+                break
             else: #search for shortest path in database if not in the same road
                 if self.draw_shortest_path(prev_road_id, prev_segment_id, road_id, seg_id) == 0:
                     flag = True
@@ -696,6 +704,8 @@ class MapCanvas(Frame):
         #self.draw_line(px, py, minlx, minly, fill="yellow", dash=(3,3), width=1)
         #self.draw_line(minx1, miny1, minx2, miny2)
 
+	if len(matching_set) == 0:
+            return -1, -1
         return road_id, seg_id
 
     def draw_map_matching_trajectory(self, filename):
@@ -715,7 +725,12 @@ class MapCanvas(Frame):
         self.MapMatchingFile = open(filename + '_matching', 'w')
 
         for p in points:
-            prev_road_id, prev_segment_id = self.draw_map_matching_point(filename, p[0], p[1], p[2], prev_road_id, prev_segment_id)
+            i, j = self.draw_map_matching_point(filename, p[0], p[1], p[2], prev_road_id, prev_segment_id)
+            if not (i,j) == (-1,-1):
+                prev_road_id = i
+                prev_segment_id = j
+   	    else:
+                print "Matching Failed! The GPS point has been discarded!"	
 
         self.MapMatchingFile.close()
 
