@@ -1,4 +1,3 @@
-TrajectoryMap
+Trajectory Storage System
 =============
-
-Operation on Beijing Map and GPS points
+•	Reduced 60% of space compared with PostGIS and achieved faster query, by storing road indices instead of latitude & longitude
